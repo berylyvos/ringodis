@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"ringodis/config"
 	"ringodis/lib/logger"
+	"ringodis/resp/server"
 	"ringodis/tcp"
 )
 
@@ -24,7 +25,7 @@ func main() {
 			Address: fmt.Sprintf("%s:%d", config.Properties.Bind,
 				config.Properties.Port),
 		},
-		tcp.MakeHandler(),
+		server.MakeHandler(),
 	)
 	if err != nil {
 		logger.Error(err)
