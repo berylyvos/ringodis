@@ -9,6 +9,7 @@ import (
 	"ringodis/resp/reply"
 	"runtime/debug"
 	"strconv"
+	"strings"
 )
 
 const pErr = "protocol error: "
@@ -79,6 +80,7 @@ func parse0(reader io.Reader, ch chan<- *Payload) {
 		if state.readingMultiLine {
 			if err = parseBody(msg, state); err != nil {
 				ch <- &Payload{Err: err}
+				state.reset()
 			} else if state.parsed() {
 				var rep resp.Reply
 				if state.msgType == '*' {
@@ -90,23 +92,28 @@ func parse0(reader io.Reader, ch chan<- *Payload) {
 					Data: rep,
 					Err:  err,
 				}
+				state.reset()
 			}
 		} else {
 			if msg[0] == '*' {
 				if err = parseMultiBulkHeader(msg, state); err != nil {
 					ch <- &Payload{Err: err}
+					state.reset()
 				} else if state.expectedArgsCount == 0 {
 					ch <- &Payload{
 						Data: reply.MakeEmptyMultiBulkReply(),
 					}
+					state.reset()
 				}
 			} else if msg[0] == '$' {
 				if err = parseBulkHeader(msg, state); err != nil {
 					ch <- &Payload{Err: err}
+					state.reset()
 				} else if state.bulkLen == -1 {
 					ch <- &Payload{
 						Data: reply.MakeNullBulkReply(),
 					}
+					state.reset()
 				}
 			} else { // msg[0] == '+' || '-' || ':'
 				rep, err := parseSingleLineReply(msg)
@@ -114,9 +121,9 @@ func parse0(reader io.Reader, ch chan<- *Payload) {
 					Data: rep,
 					Err:  err,
 				}
+				state.reset()
 			}
 		}
-		state.reset()
 	}
 }
 
@@ -190,7 +197,7 @@ func parseBulkHeader(msg []byte, state *readState) error {
 
 // parseSingleLineReply parse single line (e.g. "+OK\r\n", ":42\r\n") and return a resp.Reply
 func parseSingleLineReply(msg []byte) (resp.Reply, error) {
-	line := string(msg[:len(msg)-2])
+	line := strings.TrimSuffix(string(msg), "\r\n")
 	var res resp.Reply
 	switch msg[0] {
 	case '+':
