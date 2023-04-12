@@ -19,7 +19,6 @@ func (d *SyncDict) Len() int {
 	return length
 }
 
-// Put puts key value into dict (if key exists, update val and return 0, otherwise insert k-v and return 1)
 func (d *SyncDict) Put(key string, val interface{}) (result int) {
 	if _, exist := d.m.Load(key); exist {
 		d.m.Store(key, val)
