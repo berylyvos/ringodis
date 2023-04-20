@@ -262,7 +262,7 @@ func (d *ConcurrentDict) RandomDistinctKeys(limit int) []string {
 	return keys
 }
 
-func (d *ConcurrentDict) clear() {
+func (d *ConcurrentDict) Clear() {
 	*d = *MakeConcurrent(d.shardCount)
 }
 
