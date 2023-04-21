@@ -13,6 +13,10 @@ func (r *UnknownErrReply) Error() string {
 	return "Err unknown"
 }
 
+func MakeUnknownErrReply() *UnknownErrReply {
+	return &UnknownErrReply{}
+}
+
 // ArgNumErrReply represents wrong number of arguments for command
 type ArgNumErrReply struct {
 	Cmd string
