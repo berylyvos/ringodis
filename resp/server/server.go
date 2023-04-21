@@ -27,7 +27,7 @@ type Handler struct {
 
 func MakeHandler() *Handler {
 	var db idb.DB
-	db = database.NewEchoDB()
+	db = database.NewStandaloneServer()
 	return &Handler{
 		db: db,
 	}
