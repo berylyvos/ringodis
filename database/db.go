@@ -2,20 +2,32 @@ package database
 
 import (
 	"ringodis/ds/dict"
+	"ringodis/ds/lock"
 	"ringodis/interface/database"
 	"ringodis/interface/resp"
+	"ringodis/lib/logger"
+	"ringodis/lib/timewheel"
 	"ringodis/resp/reply"
 	"strings"
+	"time"
 )
 
 const (
 	dataDictSize = 1 << 16 // 65536
+	ttlDictSize  = 1 << 10 // 1024
+	lockerSize   = 1 << 10 // 1024
 )
 
 // DB stores data and execute user's commands
 type DB struct {
 	index int
-	data  dict.Dict
+	// key -> DataEntity
+	data dict.Dict
+	// key -> expireTime (time.Time)
+	ttlMap dict.Dict
+
+	// use locker for complicated command only, e.g. rpush, incr ...
+	locker *lock.Locks
 }
 
 // ExecFunc is interface for command executor
@@ -29,7 +41,9 @@ type CmdArgs = [][]byte
 
 func makeDB() *DB {
 	return &DB{
-		data: dict.MakeConcurrent(dataDictSize),
+		data:   dict.MakeConcurrent(dataDictSize),
+		ttlMap: dict.MakeConcurrent(ttlDictSize),
+		locker: lock.Make(lockerSize),
 	}
 }
 
@@ -60,12 +74,12 @@ func validateArity(arity int, cmdLine CmdLine) bool {
 	return argNum >= -arity
 }
 
-/* ---- Data Access ----- */
+/* ==== Data Access ==== */
 
 // GetEntity returns DataEntity bind to given key
 func (db *DB) GetEntity(key string) (*database.DataEntity, bool) {
 	raw, exists := db.data.Get(key)
-	if !exists {
+	if !exists || db.IsExpired(key) {
 		return nil, false
 	}
 	entity, _ := raw.(*database.DataEntity)
@@ -90,6 +104,8 @@ func (db *DB) PutIfAbsent(key string, entity *database.DataEntity) int {
 // Remove the given key from db
 func (db *DB) Remove(key string) {
 	db.data.Remove(key)
+	db.ttlMap.Remove(key)
+	timewheel.Cancel(genExpireTask(key))
 }
 
 // Removes the given keys from db
@@ -107,4 +123,66 @@ func (db *DB) Removes(keys ...string) (deleted int) {
 // Flush clean database
 func (db *DB) Flush() {
 	db.data.Clear()
+	db.ttlMap.Clear()
+	db.locker = lock.Make(lockerSize)
+}
+
+/* ==== Lock Function ==== */
+
+// RWLocks lock keys for writing and reading
+func (db *DB) RWLocks(writerKeys, readerKeys []string) {
+	db.locker.RWLocks(writerKeys, readerKeys)
+}
+
+// RWUnLocks unlock keys for writing and reading
+func (db *DB) RWUnLocks(writerKeys, readerKeys []string) {
+	db.locker.RWUnLocks(writerKeys, readerKeys)
+}
+
+/* ==== TTL Functions ==== */
+
+func genExpireTask(key string) string {
+	return "expire:" + key
+}
+
+// Expire sets ttlCmd of a key
+func (db *DB) Expire(key string, expireTime time.Time) {
+	db.ttlMap.Put(key, expireTime)
+	taskKey := genExpireTask(key)
+	// set cron job using time wheel, key will be deleted when expire
+	timewheel.At(expireTime, taskKey, func() {
+		keys := []string{key}
+		db.RWLocks(keys, nil)
+		defer db.RWUnLocks(keys, nil)
+		// check-lock-check, ttl may be updated during waiting lock
+		logger.Info("expire " + key)
+		rawExpireTime, exists := db.ttlMap.Get(key)
+		if !exists {
+			return
+		}
+		expireTime, _ := rawExpireTime.(time.Time)
+		if time.Now().After(expireTime) {
+			db.Remove(key)
+		}
+	})
+}
+
+// Persist cancel ttlCmd of a key
+func (db *DB) Persist(key string) {
+	db.ttlMap.Remove(key)
+	timewheel.Cancel(genExpireTask(key))
+}
+
+// IsExpired check whether a key is expired
+func (db *DB) IsExpired(key string) bool {
+	rawExpireTime, exists := db.ttlMap.Get(key)
+	if !exists {
+		return false
+	}
+	expireTime, _ := rawExpireTime.(time.Time)
+	if time.Now().After(expireTime) {
+		db.Remove(key)
+		return true
+	}
+	return false
 }
