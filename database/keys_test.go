@@ -1,6 +1,7 @@
 package database
 
 import (
+	"fmt"
 	"ringodis/lib/utils"
 	"ringodis/resp/reply"
 	"ringodis/resp/reply/asserts"
@@ -70,16 +71,16 @@ func TestRename(t *testing.T) {
 	result = testDB.Exec(nil, utils.ToCmdLine("exists", newKey))
 	asserts.AssertIntReply(t, result, 1)
 	// check ttl
-	//result = testDB.Exec(nil, utils.ToCmdLine("ttl", newKey))
-	//intResult, ok := result.(*reply.IntReply)
-	//if !ok {
-	//	t.Error(fmt.Sprintf("expected int reply, actually %s", result.ToBytes()))
-	//	return
-	//}
-	//if intResult.Code <= 0 {
-	//	t.Errorf("expected ttl more than 0, actual: %d", intResult.Code)
-	//	return
-	//}
+	result = testDB.Exec(nil, utils.ToCmdLine("ttl", newKey))
+	intResult, ok := result.(*reply.IntReply)
+	if !ok {
+		t.Error(fmt.Sprintf("expected int reply, actually %s", result.ToBytes()))
+		return
+	}
+	if intResult.Code <= 0 {
+		t.Errorf("expected ttl more than 0, actual: %d", intResult.Code)
+		return
+	}
 }
 
 func TestRenameNx(t *testing.T) {
@@ -94,16 +95,16 @@ func TestRenameNx(t *testing.T) {
 	asserts.AssertIntReply(t, result, 0)
 	result = testDB.Exec(nil, utils.ToCmdLine("exists", newKey))
 	asserts.AssertIntReply(t, result, 1)
-	//result = testDB.Exec(nil, utils.ToCmdLine("ttl", newKey))
-	//intResult, ok := result.(*reply.IntReply)
-	//if !ok {
-	//	t.Error(fmt.Sprintf("expected int reply, actually %s", result.ToBytes()))
-	//	return
-	//}
-	//if intResult.Code <= 0 {
-	//	t.Errorf("expected ttl more than 0, actual: %d", intResult.Code)
-	//	return
-	//}
+	result = testDB.Exec(nil, utils.ToCmdLine("ttl", newKey))
+	intResult, ok := result.(*reply.IntReply)
+	if !ok {
+		t.Error(fmt.Sprintf("expected int reply, actually %s", result.ToBytes()))
+		return
+	}
+	if intResult.Code <= 0 {
+		t.Errorf("expected ttl more than 0, actual: %d", intResult.Code)
+		return
+	}
 }
 
 func TestKeys(t *testing.T) {

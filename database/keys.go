@@ -5,6 +5,8 @@ import (
 	"ringodis/interface/resp"
 	"ringodis/lib/wildcard"
 	"ringodis/resp/reply"
+	"strconv"
+	"time"
 )
 
 // execDel deletes one or more keys
@@ -61,8 +63,15 @@ func execRename(db *DB, args CmdArgs) resp.Reply {
 	if !ok {
 		return reply.MakeErrReply("no such key")
 	}
+	srcTTL, hasTTL := db.ttlMap.Get(src)
 	db.PutEntity(dest, entity)
 	db.Remove(src)
+	if hasTTL {
+		db.Persist(src)
+		db.Persist(dest)
+		expireTime, _ := srcTTL.(time.Time)
+		db.Expire(dest, expireTime)
+	}
 	return reply.MakeOkReply()
 }
 
@@ -78,9 +87,45 @@ func execRenameNx(db *DB, args CmdArgs) resp.Reply {
 	if !ok {
 		return reply.MakeErrReply("no such key")
 	}
+	srcTTL, hasTTL := db.ttlMap.Get(src)
 	db.PutEntity(dest, entity)
 	db.Remove(src)
+	if hasTTL {
+		db.Persist(src)
+		db.Persist(dest)
+		expireTime, _ := srcTTL.(time.Time)
+		db.Expire(dest, expireTime)
+	}
 	return reply.MakeIntReply(1)
+}
+
+// execExpire sets a key's time to live in seconds
+func execExpire(db *DB, args CmdArgs) resp.Reply {
+	key := string(args[0])
+	if _, exists := db.GetEntity(key); !exists {
+		return reply.MakeIntReply(0)
+	}
+	ttlSec, err := strconv.ParseInt(string(args[1]), 10, 64)
+	if err != nil {
+		return reply.MakeErrReply("ERR value is not an integer or out of range")
+	}
+	db.Expire(key, calcExpireTime(ttlSec))
+	return reply.MakeIntReply(1)
+}
+
+// execTTL returns a key's time to live in seconds
+func execTTL(db *DB, args CmdArgs) resp.Reply {
+	key := string(args[0])
+	if _, exists := db.GetEntity(key); !exists {
+		return reply.MakeIntReply(-2)
+	}
+	raw, exists := db.ttlMap.Get(key)
+	if !exists {
+		return reply.MakeIntReply(-1)
+	}
+	expireTime, _ := raw.(time.Time)
+	ttl := expireTime.Sub(time.Now()) / time.Second
+	return reply.MakeIntReply(int64(ttl))
 }
 
 // execKeys returns all keys matching the given pattern
@@ -107,5 +152,7 @@ func init() {
 	RegisterCommand("Rename", execRename, 3)
 	RegisterCommand("RenameNx", execRenameNx, 3)
 	RegisterCommand("Keys", execKeys, 2)
+	RegisterCommand("Expire", execExpire, 3)
+	RegisterCommand("TTL", execTTL, 2)
 
 }
