@@ -45,8 +45,8 @@ func execSet(db *DB, args CmdArgs) resp.Reply {
 	ttl := unlimitedTTL
 
 	if len(args) > 2 {
-		if arg := strings.ToUpper(string(args[2])); arg == "EX" {
-			ttlSec, err := strconv.ParseInt(arg, 10, 64)
+		if xx := strings.ToUpper(string(args[2])); xx == "EX" {
+			ttlSec, err := strconv.ParseInt(string(args[3]), 10, 64)
 			if err != nil {
 				return reply.MakeSyntaxErrReply()
 			}
