@@ -145,6 +145,10 @@ func genExpireTask(key string) string {
 	return "expire:" + key
 }
 
+func calcExpireTime(ttlSec int64) time.Time {
+	return time.Now().Add(time.Duration(ttlSec*1000) * time.Millisecond)
+}
+
 // Expire sets ttlCmd of a key
 func (db *DB) Expire(key string, expireTime time.Time) {
 	db.ttlMap.Put(key, expireTime)

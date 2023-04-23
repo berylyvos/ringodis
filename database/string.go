@@ -4,6 +4,12 @@ import (
 	"ringodis/interface/database"
 	"ringodis/interface/resp"
 	"ringodis/resp/reply"
+	"strconv"
+	"strings"
+)
+
+const (
+	unlimitedTTL int64 = 0
 )
 
 func (db *DB) getAsString(key string) ([]byte, reply.ErrorReply) {
@@ -32,13 +38,38 @@ func execGet(db *DB, args CmdArgs) resp.Reply {
 }
 
 // execSet sets string value and time to live to the given key
+// SET key value [EX seconds]
 func execSet(db *DB, args CmdArgs) resp.Reply {
 	key := string(args[0])
 	val := args[1]
+	ttl := unlimitedTTL
+
+	if len(args) > 2 {
+		if arg := strings.ToUpper(string(args[2])); arg == "EX" {
+			ttlSec, err := strconv.ParseInt(arg, 10, 64)
+			if err != nil {
+				return reply.MakeSyntaxErrReply()
+			}
+			if ttlSec <= 0 {
+				return reply.MakeErrReply("ERR invalid expire time in set")
+			}
+			ttl = ttlSec
+		} else {
+			return reply.MakeSyntaxErrReply()
+		}
+	}
+
 	entity := &database.DataEntity{
 		Data: val,
 	}
 	db.PutEntity(key, entity)
+
+	if ttl != unlimitedTTL {
+		db.Expire(key, calcExpireTime(ttl))
+	} else {
+		db.Persist(key)
+	}
+
 	return reply.MakeOkReply()
 }
 
@@ -51,6 +82,28 @@ func execSetNX(db *DB, args CmdArgs) resp.Reply {
 	}
 	res := db.PutIfAbsent(key, entity)
 	return reply.MakeIntReply(int64(res))
+}
+
+// execSetEX sets string and its ttl
+// SETEX key seconds value
+func execSetEX(db *DB, args CmdArgs) resp.Reply {
+	key := string(args[0])
+	val := args[2]
+	entity := &database.DataEntity{
+		Data: val,
+	}
+
+	ttlSec, err := strconv.ParseInt(string(args[1]), 10, 64)
+	if err != nil {
+		return reply.MakeSyntaxErrReply()
+	}
+	if ttlSec <= 0 {
+		return reply.MakeErrReply("ERR invalid expire time in setex")
+	}
+
+	db.PutEntity(key, entity)
+	db.Expire(key, calcExpireTime(ttlSec))
+	return reply.MakeOkReply()
 }
 
 // execGetSet sets value of a string-type key and returns its old value
@@ -88,4 +141,5 @@ func init() {
 	RegisterCommand("SetNX", execSetNX, 3)
 	RegisterCommand("GetSet", execGetSet, 3)
 	RegisterCommand("StrLen", execStrLen, 2)
+	RegisterCommand("SetEX", execSetEX, 4)
 }
