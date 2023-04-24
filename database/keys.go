@@ -54,6 +54,12 @@ func execType(db *DB, args CmdArgs) resp.Reply {
 	return reply.MakeUnknownErrReply()
 }
 
+func prepareRename(args CmdArgs) ([]string, []string) {
+	src := string(args[0])
+	dst := string(args[1])
+	return []string{dst}, []string{src}
+}
+
 // execRename renames a key and overwrites the destination
 func execRename(db *DB, args CmdArgs) resp.Reply {
 	src := string(args[0])
@@ -145,14 +151,13 @@ func execKeys(db *DB, args CmdArgs) resp.Reply {
 }
 
 func init() {
-	RegisterCommand("Del", execDel, -2)
-	RegisterCommand("Exists", execExists, -2)
-	RegisterCommand("FlushDB", execFlushDB, -1)
-	RegisterCommand("Type", execType, 2)
-	RegisterCommand("Rename", execRename, 3)
-	RegisterCommand("RenameNx", execRenameNx, 3)
-	RegisterCommand("Keys", execKeys, 2)
-	RegisterCommand("Expire", execExpire, 3)
-	RegisterCommand("TTL", execTTL, 2)
-
+	RegisterCommand("Del", execDel, writeAllKeys, -2)
+	RegisterCommand("Exists", execExists, readAllKeys, -2)
+	RegisterCommand("FlushDB", execFlushDB, noPrepare, -1)
+	RegisterCommand("Type", execType, readFirstKey, 2)
+	RegisterCommand("Rename", execRename, prepareRename, 3)
+	RegisterCommand("RenameNx", execRenameNx, prepareRename, 3)
+	RegisterCommand("Keys", execKeys, noPrepare, 2)
+	RegisterCommand("Expire", execExpire, writeFirstKey, 3)
+	RegisterCommand("TTL", execTTL, readFirstKey, 2)
 }

@@ -136,10 +136,10 @@ func execStrLen(db *DB, args CmdArgs) resp.Reply {
 }
 
 func init() {
-	RegisterCommand("Get", execGet, 2)
-	RegisterCommand("Set", execSet, -3)
-	RegisterCommand("SetNX", execSetNX, 3)
-	RegisterCommand("GetSet", execGetSet, 3)
-	RegisterCommand("StrLen", execStrLen, 2)
-	RegisterCommand("SetEX", execSetEX, 4)
+	RegisterCommand("Get", execGet, readFirstKey, 2)
+	RegisterCommand("Set", execSet, writeFirstKey, -3)
+	RegisterCommand("SetNX", execSetNX, writeFirstKey, 3)
+	RegisterCommand("GetSet", execGetSet, writeFirstKey, 3)
+	RegisterCommand("StrLen", execStrLen, readFirstKey, 2)
+	RegisterCommand("SetEX", execSetEX, writeFirstKey, 4)
 }

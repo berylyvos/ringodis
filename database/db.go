@@ -39,6 +39,10 @@ type CmdLine = [][]byte
 // CmdArgs is alias for [][]byte, represents a command line exclude command name
 type CmdArgs = [][]byte
 
+// PreFunc analyses command line when queued command to `multi`
+// returns related writer and reader keys
+type PreFunc func(args CmdArgs) ([]string, []string)
+
 func makeDB() *DB {
 	return &DB{
 		data:   dict.MakeConcurrent(dataDictSize),
@@ -62,7 +66,10 @@ func (db *DB) execRegularCommand(cmdLine CmdLine) resp.Reply {
 	if !validateArity(cmd.arity, cmdLine) {
 		return reply.MakeArgNumErrReply(cmdName)
 	}
-
+    
+    writerKeys, readerKeys := cmd.prepare(cmdLine[1:])
+    db.RWLocks(writerKeys, readerKeys)
+    defer db.RWUnLocks(writerKeys, readerKeys)
 	return cmd.executor(db, cmdLine[1:])
 }
 
