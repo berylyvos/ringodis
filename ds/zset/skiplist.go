@@ -168,15 +168,34 @@ func (sl *skiplist) getByRank(rank int64) *node {
 	// rank start at 1, head rank is 0
 	var rk int64 = 0
 	cur := sl.head
-	for lv := sl.lv - 1; lv >= 0; lv-- {
+	for i := sl.lv - 1; i >= 0; i-- {
 		// scan in current level, if over rank, down to next level
-		for cur.level[lv].next != nil && (rk+cur.level[lv].span) <= rank {
-			rk += cur.level[lv].span
-			cur = cur.level[lv].next
+		for cur.level[i].next != nil && (rk+cur.level[i].span) <= rank {
+			rk += cur.level[i].span
+			cur = cur.level[i].next
 		}
 		if rk == rank {
 			return cur
 		}
 	}
 	return nil
+}
+
+func (sl *skiplist) getRank(member string, score float64) int64 {
+	var rank int64 = 0
+	cur := sl.head
+	for i := sl.lv - 1; i >= 0; i-- {
+		for cur.level[i].next != nil &&
+			(cur.level[i].next.Score < score ||
+				(cur.level[i].next.Score == score &&
+					cur.level[i].next.Member <= member)) {
+			rank += cur.level[i].span
+			cur = cur.level[i].next
+		}
+
+		if cur.Member == member {
+			return rank
+		}
+	}
+	return 0
 }
