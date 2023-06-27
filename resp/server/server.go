@@ -4,6 +4,8 @@ import (
 	"context"
 	"io"
 	"net"
+	"ringodis/cluster"
+	"ringodis/config"
 	"ringodis/database"
 	idb "ringodis/interface/database"
 	"ringodis/lib/logger"
@@ -27,7 +29,11 @@ type Handler struct {
 
 func MakeHandler() *Handler {
 	var db idb.DB
-	db = database.NewStandaloneServer()
+	if config.Properties.Self != "" && len(config.Properties.Peers) > 0 {
+		db = cluster.MakeCluster()
+	} else {
+		db = database.NewStandaloneServer()
+	}
 	return &Handler{
 		db: db,
 	}

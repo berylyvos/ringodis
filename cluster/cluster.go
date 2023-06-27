@@ -4,10 +4,13 @@ import (
 	"context"
 	pool "github.com/jolestar/go-commons-pool/v2"
 	"ringodis/config"
-	database2 "ringodis/database"
-	"ringodis/interface/database"
+	"ringodis/database"
+	idb "ringodis/interface/database"
 	"ringodis/interface/resp"
 	"ringodis/lib/consistenthash"
+	"ringodis/lib/logger"
+	"ringodis/resp/reply"
+	"strings"
 )
 
 type Cluster struct {
@@ -15,7 +18,31 @@ type Cluster struct {
 	nodes      []string
 	peerPicker *consistenthash.Map
 	peerConn   map[string]*pool.ObjectPool
-	db         database.DB
+	db         idb.DB
+}
+
+func (cluster *Cluster) Exec(client resp.Connection, cmdLine idb.CmdLine) (res resp.Reply) {
+	defer func() {
+		if err := recover(); err != nil {
+			logger.Error(err)
+			res = reply.MakeUnknownErrReply()
+		}
+	}()
+	cmdName := strings.ToLower(string(cmdLine[0]))
+	cmdFunc, ok := router[cmdName]
+	if !ok {
+		res = reply.MakeErrReply("not supported command")
+	}
+	res = cmdFunc(cluster, client, cmdLine)
+	return
+}
+
+func (cluster *Cluster) Close() {
+	cluster.db.Close()
+}
+
+func (cluster *Cluster) AfterClientClose(c resp.Connection) {
+	cluster.db.AfterClientClose(c)
 }
 
 func MakeCluster() *Cluster {
@@ -24,7 +51,7 @@ func MakeCluster() *Cluster {
 		nodes:      make([]string, 0, len(config.Properties.Peers)+1),
 		peerPicker: consistenthash.New(1, nil),
 		peerConn:   make(map[string]*pool.ObjectPool),
-		db:         database2.NewStandaloneServer(),
+		db:         database.NewStandaloneServer(),
 	}
 	ctx := context.Background()
 	for _, peer := range config.Properties.Peers {
@@ -38,17 +65,4 @@ func MakeCluster() *Cluster {
 	return cluster
 }
 
-func (c *Cluster) Exec(client resp.Connection, cmdLine database.CmdLine) resp.Reply {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (c *Cluster) Close() {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (c *Cluster) AfterClientClose(client resp.Connection) {
-	//TODO implement me
-	panic("implement me")
-}
+type CmdFunc func(cluster *Cluster, c resp.Connection, cmdLine [][]byte) resp.Reply
